@@ -1,0 +1,48 @@
+sudo apt-get update
+sudo apt install openjdk-8-jdk
+wget https://archive.apache.org/dist/hadoop/core/hadoop-2.8.1/hadoop-2.8.1.tar.gz
+tar xvf hadoop-2.8.1.tar.gz
+
+cd hadoop-2.8.1
+mkdir andrew-namenode andrew-datanode
+
+ADD TO ~/.bashrc:
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/jre
+export PATH="$PATH:~/hadoop-2.8.1/bin"
+
+source ~/.bashrc
+
+ADD TO ~/hadoop-2.8.1/etc/hadoop/hadoop-env.sh:
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/jre
+
+ADD TO ~/hadoop-2.8.1/etc/hadoop/hdfs-site.xml:
+        <property>
+                <name>dfs.name.dir</name>
+                <value>~/hadoop-2.8.1/andrew-namenode</value>
+                <final>true</final>
+        </property>
+        <property>
+                <name>dfs.data.dir</name>
+                <value>~/hadoop-2.8.1/andrew-datanode</value>
+        </property>
+
+ADD TO ~/hadoop-2.8.1/etc/hadoop/yarn-site.xml:
+<property>
+        <name>yarn.resourcemanager.hostname</name>
+        <value>localhost</value>
+</property>
+
+ADD TO ~/hadoop-2.8.1/etc/hadoop/core-site.xml:
+    <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://localhost:9000</value>
+    </property>
+
+ssh-keygen -t rsa -P ""
+cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+
+hdfs namenode -format
+sbin/start-dfs.sh
+sbin/start-yarn.sh
+jps
