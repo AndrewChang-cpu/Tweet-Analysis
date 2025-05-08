@@ -50,7 +50,7 @@ columns = [
 tweets_df = tweets_rdd.toDF(columns)
 
 #    b) Write out as Parquet for downstream Ray processing
-tweets_df.write.mode("overwrite").csv("output_tweets_features.csv", header=True)
+tweets_df.write.mode("overwrite").csv("output_tweets_features", header=True)
 
 # 6. Stop the session if running as a standalone script
 spark.stop()
