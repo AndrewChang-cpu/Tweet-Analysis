@@ -2,7 +2,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, size, length, to_date, current_date, datediff
 
 spark = SparkSession.builder.appName("TweetFeatures").getOrCreate()
-tweets = spark.read.json("path/to/tweets.json")
+tweets = spark.read.json("out.json")
 
 df = tweets.select(
     col("full_text").alias("text"),
