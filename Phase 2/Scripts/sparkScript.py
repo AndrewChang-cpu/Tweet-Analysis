@@ -10,7 +10,7 @@ sc = spark.sparkContext
 
 # 2. Point to your raw JSON file(s) in your Lakehouse/Lake:
 #    e.g. "abfss://<container>@<storage-account>.dfs.core.windows.net/path/to/tweets.json"
-input_path = "abfss://<container>@<storage-account>.dfs.core.windows.net/path/to/tweets.json"
+input_path = "out.json"
 
 # 3. Read as text and parse JSON into Python dicts
 tweets_rdd = sc.textFile(input_path) \
@@ -50,7 +50,7 @@ columns = [
 tweets_df = tweets_rdd.toDF(columns)
 
 #    b) Write out as Parquet for downstream Ray processing
-tweets_df.write.mode("overwrite").parquet("abfss://<container>@<storage-account>.dfs.core.windows.net/processed/tweets_features.parquet")
+tweets_df.write.mode("overwrite").csv("output_tweets_features.csv", header=True)
 
 # 6. Stop the session if running as a standalone script
 spark.stop()
