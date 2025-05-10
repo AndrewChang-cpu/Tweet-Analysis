@@ -37,8 +37,13 @@ def main():
     args = parse_args()
     ray.init()
 
-    # 1) Load CSV as Ray Dataset with proper quoting and select only the 7 columns
-    ds = read_csv(args.input_csv)
+    # Determine CSV file pattern
+    input_path = args.input_csv
+    if os.path.isdir(input_path):
+        input_path = os.path.join(input_path, "*.csv")
+
+    # 1) Load all CSVs as one Ray Dataset (7 clean columns only)
+    ds = read_csv(input_path)
 
     # 2) NLP augmentation
     sentiment_pipe = pipeline(
