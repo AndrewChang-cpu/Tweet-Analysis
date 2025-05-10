@@ -12,6 +12,7 @@ Usage:
   python ray_analysis.py --input_csv path/to/output_tweets_features/*.csv --output_dir path/to/output_dir
 """
 import argparse
+import os
 import ray
 from ray.data import read_csv
 from transformers import pipeline
