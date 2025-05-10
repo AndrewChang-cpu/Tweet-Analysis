@@ -23,6 +23,8 @@ for path in csv_files:
             # Split from the right to handle commas in the text column
             parts = line.rsplit(",", 6)
             if len(parts) != 7:
+                if skipped_lines < 25:
+                    print(parts)
                 skipped_lines += 1
                 continue  # Skip malformed rows
             try:
