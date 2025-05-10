@@ -4,10 +4,9 @@ Ray Analysis Pipeline (Python)
 
 This script performs the Ray-based portion of the project:
 1. Load the CSV produced by the Scala extraction pipeline (7 specific columns)
-2. Clean embedded newlines in `full_text`
-3. Augment with sentiment and emotion via HuggingFace models in Ray
-4. Run descriptive analytics
-5. Train and evaluate a multiple linear regression
+2. Augment with sentiment and emotion via HuggingFace models in Ray
+3. Run descriptive analytics
+4. Train and evaluate a multiple linear regression
 
 Usage:
   python ray_analysis.py --input_csv path/to/output_tweets_features/*.csv --output_dir path/to/output_dir
@@ -20,7 +19,6 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
-import re
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -35,60 +33,14 @@ def parse_args():
     return parser.parse_args()
 
 
-def clean_full_text(batch: pd.DataFrame) -> pd.DataFrame:
-    """
-    Remove embedded newline characters within the full_text field,
-    replacing any \r or \n with a single space.
-    """
-    batch["full_text"] = batch["full_text"].str.replace(r"[\r\n]+", " ", regex=True)
-    return batch
-
-
-def add_nlp(batch: pd.DataFrame) -> pd.DataFrame:
-    texts = batch["full_text"].tolist()
-    # sentiment
-    sents = sentiment_pipe(texts, truncation=True)
-    batch["sentiment_label"] = [s["label"] for s in sents]
-    batch["sentiment_score"] = [s["score"] for s in sents]
-    # emotion
-    emos = emotion_pipe(texts, truncation=True)
-    batch["emotion_label"] = [max(e, key=lambda x: x["score"])["label"] for e in emos]
-    batch["emotion_score"] = [max(e, key=lambda x: x["score"])["score"] for e in emos]
-    # popularity score
-    batch["popularity_score"] = batch["retweet_count"] + batch["favorite_count"]
-    return batch
-
-
 def main():
     args = parse_args()
     ray.init()
 
     # 1) Load CSV as Ray Dataset with proper quoting and select only the 7 columns
-    ds = read_csv(
-        args.input_csv,
-        sep=",",
-        quotechar='"',
-        escapechar='\\',
-        usecols=[
-            "full_text",
-            "retweet_count",
-            "favorite_count",
-            "num_hashtags",
-            "text_length",
-            "user_followers",
-            "user_friends"
-        ]
-    )
+    ds = read_csv(args.input_csv)
 
-    # 2) Clean embedded newlines in full_text
-    ds = ds.map_batches(
-        clean_full_text,
-        batch_size=512,
-        batch_format="pandas"
-    )
-
-    # 3) NLP augmentation
-    global sentiment_pipe, emotion_pipe
+    # 2) NLP augmentation
     sentiment_pipe = pipeline(
         "sentiment-analysis",
         model="distilbert-base-uncased-finetuned-sst-2-english",
@@ -101,38 +53,58 @@ def main():
         device=-1
     )
 
+    def add_nlp(batch: pd.DataFrame) -> pd.DataFrame:
+        texts = batch["full_text"].tolist()
+        # sentiment
+        sents = sentiment_pipe(texts, truncation=True)
+        batch["sentiment_label"] = [s["label"] for s in sents]
+        batch["sentiment_score"] = [s["score"] for s in sents]
+        # emotion
+        emos = emotion_pipe(texts, truncation=True)
+        batch["emotion_label"] = [max(e, key=lambda x: x["score"])["label"] for e in emos]
+        batch["emotion_score"] = [max(e, key=lambda x: x["score"])["score"] for e in emos]
+        # popularity score
+        batch["popularity_score"] = batch["retweet_count"] + batch["favorite_count"]
+        return batch
+
     ds = ds.map_batches(
         add_nlp,
         batch_size=256,
         batch_format="pandas"
     )
 
-    # 4) Persist augmented dataset
+    # 3) Persist augmented dataset
     ds.write_csv(f"{args.output_dir}/tweets_augmented", header=True)
 
-    # 5) Convert to pandas for analytics/modeling
+    # 4) Convert to pandas for analytics/modeling
     pdf = ds.to_pandas()
 
-    # Descriptive analytics
+    # 5) Descriptive analytics
     print("Avg popularity by sentiment:")
     print(pdf.groupby("sentiment_label")["popularity_score"].mean())
+
     print("\nAvg popularity by emotion:")
     print(pdf.groupby("emotion_label")["popularity_score"].mean())
+
     print("\nAvg popularity with/without hashtags:")
     print(pdf.groupby(pdf["num_hashtags"]>0)["popularity_score"].mean())
+
     print(f"\nText length correlation: {pdf['text_length'].corr(pdf['popularity_score']):.3f}")
 
     # 6) Regression modeling
+    pdf["has_hashtag"] = (pdf["num_hashtags"] > 0).astype(int)
+    pdf["has_media"] = (pdf.get("num_media", pd.Series(0)) > 0).astype(int)
+
     features = pdf[[
         "sentiment_score",
         "emotion_score",
         "text_length",
-        (pdf["num_hashtags"]>0).astype(int).rename("has_hashtag"),
-        # if num_media missing, default to 0
-        (pdf.get("num_media", pd.Series(0))>0).astype(int).rename("has_media"),
+        "has_hashtag",
+        "has_media",
         "user_followers",
         "user_friends"
     ]]
+
     target = pdf["popularity_score"]
 
     X_train, X_test, y_train, y_test = train_test_split(
