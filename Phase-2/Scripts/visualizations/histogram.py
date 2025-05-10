@@ -26,8 +26,8 @@ for path in csv_files:
                 continue  # Skip malformed rows
             try:
                 fav_count = int(parts[-5])  # 3rd from last = index -5
-                if fav_count > 0:  # Exclude entries with favorite count of 0
-                    favorite_counts.append(fav_count)
+                # if fav_count > 0:  # Exclude entries with favorite count of 0
+                favorite_counts.append(fav_count)
                 total_lines += 1
             except ValueError:
                 continue  # Skip non-integer entries
