@@ -69,8 +69,6 @@ def main():
         emos = emotion_pipe(texts, truncation=True)
         batch["emotion_label"] = [max(e, key=lambda x: x["score"])["label"] for e in emos]
         batch["emotion_score"] = [max(e, key=lambda x: x["score"])["score"] for e in emos]
-        # popularity score
-        batch["popularity_score"] = batch["retweet_count"] + batch["favorite_count"]
         return batch
 
     ds = ds.map_batches(
@@ -80,7 +78,7 @@ def main():
     )
 
     # 3) Persist augmented dataset
-    ds.write_csv(f"{args.output_dir}/tweets_augmented", header=True)
+    ds.write_csv(f"{args.output_dir}/tweets_augmented")
 
     # 4) Convert to pandas for analytics/modeling
     pdf = ds.to_pandas()
