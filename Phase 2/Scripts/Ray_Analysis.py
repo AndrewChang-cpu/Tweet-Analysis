@@ -3,13 +3,13 @@
 Ray Analysis Pipeline (Python)
 
 This script performs the Ray-based portion of the project:
-1. Load the CSV produced by the Scala extraction pipeline
+1. Load the CSV produced by the Scala extraction pipeline (7 specific columns)
 2. Augment with sentiment and emotion via HuggingFace models in Ray
 3. Run descriptive analytics
 4. Train and evaluate a multiple linear regression
 
 Usage:
-  python ray_analysis.py --input_csv path/to/output_tweets_features.csv --output_dir path/to/output_dir
+  python ray_analysis.py --input_csv path/to/output_tweets_features/*.csv --output_dir path/to/output_dir
 """
 import argparse
 import ray
@@ -22,8 +22,14 @@ from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_csv", required=True, help="Path to extracted features CSV (glob supported)")
-    parser.add_argument("--output_dir", default="tweets_augmented", help="Directory to write augmented CSV and results")
+    parser.add_argument(
+        "--input_csv", required=True,
+        help="Glob path to extracted features CSVs (only 7 columns should be present)"
+    )
+    parser.add_argument(
+        "--output_dir", default="tweets_augmented",
+        help="Directory to write augmented CSV and results"
+    )
     return parser.parse_args()
 
 
@@ -31,8 +37,17 @@ def main():
     args = parse_args()
     ray.init()
 
-    # 1) Load CSV as Ray Dataset
+    # 1) Load CSV as Ray Dataset, then select only the 7 columns
     ds = read_csv(args.input_csv)
+    ds = ds.select_columns([
+        "full_text",
+        "retweet_count",
+        "favorite_count",
+        "num_hashtags",
+        "text_length",
+        "user_followers",
+        "user_friends"
+    ])
 
     # 2) NLP augmentation
     sentiment_pipe = pipeline(
@@ -61,30 +76,45 @@ def main():
         batch["popularity_score"] = batch["retweet_count"] + batch["favorite_count"]
         return batch
 
-    ds = ds.map_batches(add_nlp, batch_size=256, batch_format="pandas")
+    ds = ds.map_batches(
+        add_nlp,
+        batch_size=256,
+        batch_format="pandas"
+    )
 
-    # Persist augmented dataset
+    # 3) Persist augmented dataset
     ds.write_csv(f"{args.output_dir}/tweets_augmented", header=True)
 
-    # Convert to pandas for analytics/modeling
+    # 4) Convert to pandas for analytics/modeling
     pdf = ds.to_pandas()
 
-    # 3) Descriptive analytics examples
+    # 5) Descriptive analytics
     print("Avg popularity by sentiment:")
     print(pdf.groupby("sentiment_label")["popularity_score"].mean())
+
     print("\nAvg popularity by emotion:")
     print(pdf.groupby("emotion_label")["popularity_score"].mean())
+
     print("\nAvg popularity with/without hashtags:")
     print(pdf.groupby(pdf["num_hashtags"]>0)["popularity_score"].mean())
+
     print(f"\nText length correlation: {pdf['text_length'].corr(pdf['popularity_score']):.3f}")
 
-    # 4) Regression modeling
-    features = pdf[["sentiment_score", "emotion_score", "text_length",
-                     (pdf["num_hashtags"]>0).astype(int).rename("has_hashtag"),
-                     (pdf["num_media"]>0).astype(int).rename("has_media"),
-                     "user_followers", "user_friends"]]
+    # 6) Regression modeling
+    features = pdf[[
+        "sentiment_score",
+        "emotion_score",
+        "text_length",
+        (pdf["num_hashtags"]>0).astype(int).rename("has_hashtag"),
+        (pdf.get("num_media", pd.Series(0))>0).astype(int).rename("has_media"),
+        "user_followers",
+        "user_friends"
+    ]]
     target = pdf["popularity_score"]
-    X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=42)
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        features, target, test_size=0.2, random_state=42
+    )
     model = LinearRegression().fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
@@ -93,7 +123,7 @@ def main():
     print(f"RMSE: {mean_squared_error(y_test, y_pred, squared=False):.3f}")
     print(f"MAE: {mean_absolute_error(y_test, y_pred):.3f}")
 
-    # coefficient listing
+    # Coefficients
     coef_df = pd.DataFrame({"feature": features.columns, "coef": model.coef_})
     print("\nCoefficients:")
     print(coef_df)
