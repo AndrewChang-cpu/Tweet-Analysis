@@ -37,17 +37,22 @@ def main():
     args = parse_args()
     ray.init()
 
-    # 1) Load CSV as Ray Dataset, then select only the 7 columns
-    ds = read_csv(args.input_csv)
-    ds = ds.select_columns([
-        "full_text",
-        "retweet_count",
-        "favorite_count",
-        "num_hashtags",
-        "text_length",
-        "user_followers",
-        "user_friends"
-    ])
+    # 1) Load CSV as Ray Dataset with proper quoting and select only the 7 columns
+    ds = read_csv(
+        args.input_csv,
+        sep=",",
+        quotechar='"',
+        escapechar='\\',
+        usecols=[
+            "full_text",
+            "retweet_count",
+            "favorite_count",
+            "num_hashtags",
+            "text_length",
+            "user_followers",
+            "user_friends"
+        ]
+    )
 
     # 2) NLP augmentation
     sentiment_pipe = pipeline(
