@@ -3,7 +3,7 @@ import glob
 import matplotlib.pyplot as plt
 
 # Directory where the part files are stored
-data_dir = "~/output_tweets_features.csv"  # Change if needed
+data_dir = os.path.expanduser("~/output_tweets_features.csv")  # Change if needed
 
 # Find all part-*.csv files
 csv_files = sorted(glob.glob(os.path.join(data_dir, "part-*.csv")))
