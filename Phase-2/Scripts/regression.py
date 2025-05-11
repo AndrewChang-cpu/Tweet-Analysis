@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+import seaborn as sns
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -59,10 +60,9 @@ def main():
  #   print(coef_df)
 
     # Plots directory
-    plots_dir = "visualizations"
+    plots_dir = os.path.join(args.input_dir, "visualizations")
     os.makedirs(plots_dir, exist_ok=True)
 
-    # Scatterplots
     def scatterplot(x, y, xlabel, ylabel, title, filename):
         plt.figure(figsize=(8, 5))
         plt.scatter(x, y, alpha=0.4)
@@ -74,19 +74,31 @@ def main():
         plt.savefig(os.path.join(plots_dir, filename))
         plt.close()
 
+    # Scatter plots vs popularity
     scatterplot(pdf["sentiment_score"], pdf["popularity_score"], "Sentiment Score", "Popularity", "Sentiment vs Popularity", "sentiment_vs_popularity.png")
-    scatterplot(pdf["sentiment_score"], pdf["favorite_count"], "Sentiment Score", "Favorites", "Sentiment vs Favorites", "sentiment_vs_favorites.png")
-    scatterplot(pdf["sentiment_score"], pdf["retweet_count"], "Sentiment Score", "Retweets", "Sentiment vs Retweets", "sentiment_vs_retweets.png")
-    scatterplot(pdf["num_hashtags"], pdf["popularity_score"], "Num Hashtags", "Popularity", "Hashtags vs Popularity", "hashtags_vs_popularity.png")
+    scatterplot(pdf["num_hashtags"], pdf["popularity_score"], "Number of Hashtags", "Popularity", "Hashtags vs Popularity", "hashtags_vs_popularity.png")
     scatterplot(pdf["text_length"], pdf["popularity_score"], "Text Length", "Popularity", "Text Length vs Popularity", "length_vs_popularity.png")
     scatterplot(pdf["user_followers"], pdf["popularity_score"], "Followers", "Popularity", "Followers vs Popularity", "followers_vs_popularity.png")
 
-    # Boxplot: Emotion vs Popularity
+    # Scatter plots vs favorites and retweets
+    scatterplot(pdf["text_length"], pdf["favorite_count"], "Text Length", "Favorites", "Text Length vs Favorites", "length_vs_favorites.png")
+    scatterplot(pdf["text_length"], pdf["retweet_count"], "Text Length", "Retweets", "Text Length vs Retweets", "length_vs_retweets.png")
+    scatterplot(pdf["num_hashtags"], pdf["favorite_count"], "Number of Hashtags", "Favorites", "Hashtags vs Favorites", "hashtags_vs_favorites.png")
+    scatterplot(pdf["num_hashtags"], pdf["retweet_count"], "Number of Hashtags", "Retweets", "Hashtags vs Retweets", "hashtags_vs_retweets.png")
+    scatterplot(pdf["user_followers"], pdf["favorite_count"], "Followers", "Favorites", "Followers vs Favorites", "followers_vs_favorites.png")
+    scatterplot(pdf["user_followers"], pdf["retweet_count"], "Followers", "Retweets", "Followers vs Retweets", "followers_vs_retweets.png")
+
+    # Boxplot: Emotion vs popularity
     plt.figure(figsize=(10, 6))
-    pdf.boxplot(column="popularity_score", by="emotion_label", grid=False)
-    plt.xticks(rotation=45)
+    sns.boxplot(x="emotion_label", y="popularity_score", data=pdf)
+    emotion_stats = pdf.groupby("emotion_label")["popularity_score"].describe()[["25%", "50%", "75%", "count"]]
+
+    for i, emotion in enumerate(emotion_stats.index):
+        stats = emotion_stats.loc[emotion]
+        label = f"Q2: {stats['50%']:.1f}\nN: {int(stats['count'])}"
+        plt.text(i, stats["75%"] + 3, label, ha='center', fontsize=9, color="black")
+
     plt.title("Popularity Score by Emotion")
-    plt.suptitle("")
     plt.xlabel("Emotion")
     plt.ylabel("Popularity Score")
     plt.tight_layout()
