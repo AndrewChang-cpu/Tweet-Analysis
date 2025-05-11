@@ -19,13 +19,13 @@ def parse_args():
 def run_regression(pdf: pd.DataFrame):
     pdf["has_hashtag"] = (pdf["num_hashtags"] > 0).astype(int)
     pdf["has_media"] = (pdf.get("num_media", pd.Series(0)) > 0).astype(int)
+    pdf = pdf.drop(columns=["has_media"], errors="ignore")
 
     features = pdf[[ 
         "sentiment_score",
         "emotion_score",
         "text_length",
         "has_hashtag",
-        "has_media",
         "user_followers",
         "user_friends"
     ]]
