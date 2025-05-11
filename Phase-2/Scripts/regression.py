@@ -46,20 +46,20 @@ def main():
         features, target, test_size=0.2, random_state=42
     )
 
-    model = LinearRegression().fit(X_train, y_train)
-    y_pred = model.predict(X_test)
+#    model = LinearRegression().fit(X_train, y_train)
+ #   y_pred = model.predict(X_test)
 
     print("\nRegression results:")
-    print(f"R2: {r2_score(y_test, y_pred):.3f}")
-    print(f"RMSE: {mean_squared_error(y_test, y_pred, squared=False):.3f}")
-    print(f"MAE: {mean_absolute_error(y_test, y_pred):.3f}")
+   # print(f"R2: {r2_score(y_test, y_pred):.3f}")
+    #print(f"RMSE: {mean_squared_error(y_test, y_pred, squared=False):.3f}")
+    #print(f"MAE: {mean_absolute_error(y_test, y_pred):.3f}")
 
-    coef_df = pd.DataFrame({"feature": features.columns, "coef": model.coef_})
+#    coef_df = pd.DataFrame({"feature": features.columns, "coef": model.coef_})
     print("\nCoefficients:")
-    print(coef_df)
+ #   print(coef_df)
 
     # Plots directory
-    plots_dir = os.path.join(args.input_dir, "visualizations")
+    plots_dir = "visualizations"
     os.makedirs(plots_dir, exist_ok=True)
 
     # Scatterplots
