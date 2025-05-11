@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Ray Analysis Pipeline (Python)
 
@@ -11,13 +10,12 @@ This script performs the Ray-based portion of the project:
 Usage:
   python ray_analysis.py --input_csv path/to/output_tweets_features/*.csv --output_dir path/to/output_dir
 """
+
 import argparse
 import os
 import ray
 from ray.data import read_csv
-from transformers import pipeline
 import pandas as pd
-import torch
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
@@ -34,60 +32,55 @@ def parse_args():
     )
     return parser.parse_args()
 
+@ray.remote(num_gpus=1)
+def run_batch(batch: pd.DataFrame) -> pd.DataFrame:
+    from transformers import pipeline
+    import torch
 
-def main():
-    args = parse_args()
-    ray.init()
+    device = 0 if torch.cuda.is_available() else -1
+    print("IS GPU AVAILABLE?", torch.cuda.is_available())
 
-    # Determine CSV file pattern
-    input_path = args.input_csv
-    if os.path.isdir(input_path):
-        input_path = os.path.join(input_path, "*.csv")
-
-    # 1) Load all CSVs as one Ray Dataset (7 clean columns only)
-    ds = read_csv(input_path)
-
-    # Use GPU if available
-    device_id = 0 if torch.cuda.is_available() else -1
-
-    # 2) NLP augmentation
     sentiment_pipe = pipeline(
         "sentiment-analysis",
         model="distilbert-base-uncased-finetuned-sst-2-english",
-        device=device_id
+        device=device
     )
     emotion_pipe = pipeline(
         "text-classification",
         model="j-hartmann/emotion-english-distilroberta-base",
         return_all_scores=True,
-        device=device_id
+        device=device
     )
 
-    def add_nlp(batch: pd.DataFrame) -> pd.DataFrame:
-        texts = batch["full_text"].tolist()
-        # sentiment
-        sents = sentiment_pipe(texts, truncation=True)
-        batch["sentiment_label"] = [s["label"] for s in sents]
-        batch["sentiment_score"] = [s["score"] for s in sents]
-        # emotion
-        emos = emotion_pipe(texts, truncation=True)
-        batch["emotion_label"] = [max(e, key=lambda x: x["score"])["label"] for e in emos]
-        batch["emotion_score"] = [max(e, key=lambda x: x["score"])["score"] for e in emos]
-        return batch
+    texts = batch["full_text"].tolist()
+    sents = sentiment_pipe(texts, truncation=True)
+    emos = emotion_pipe(texts, truncation=True)
+    batch["sentiment_label"] = [s["label"] for s in sents]
+    batch["sentiment_score"] = [s["score"] for s in sents]
+    batch["emotion_label"] = [max(e, key=lambda x: x["score"])["label"] for e in emos]
+    batch["emotion_score"] = [max(e, key=lambda x: x["score"])["score"] for e in emos]
+    return batch
+
+def main():
+    args = parse_args()
+    ray.init()
+
+    input_path = args.input_csv
+    if os.path.isdir(input_path):
+        input_path = os.path.join(input_path, "*.csv")
+
+    ds = read_csv(input_path)
 
     ds = ds.map_batches(
-        add_nlp,
+        lambda b: ray.get(run_batch.remote(b)),
         batch_size=256,
         batch_format="pandas"
     )
 
-    # 3) Persist augmented dataset
     ds.write_csv(f"{args.output_dir}/tweets_augmented")
 
-    # 4) Convert to pandas for analytics/modeling
     pdf = ds.to_pandas()
 
-    # 5) Descriptive analytics
     print("Avg popularity by sentiment:")
     print(pdf.groupby("sentiment_label")["popularity_score"].mean())
 
@@ -99,7 +92,6 @@ def main():
 
     print(f"\nText length correlation: {pdf['text_length'].corr(pdf['popularity_score']):.3f}")
 
-    # 6) Regression modeling
     pdf["has_hashtag"] = (pdf["num_hashtags"] > 0).astype(int)
     pdf["has_media"] = (pdf.get("num_media", pd.Series(0)) > 0).astype(int)
 
@@ -112,12 +104,15 @@ def main():
         "user_followers",
         "user_friends"
     ]]
+
     target = pdf["popularity_score"]
 
     X_train, X_test, y_train, y_test = train_test_split(
         features, target, test_size=0.2, random_state=42
     )
     print(X_train.shape)
+    print(X_train[:5])
+
     model = LinearRegression().fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
@@ -126,13 +121,12 @@ def main():
     print(f"RMSE: {mean_squared_error(y_test, y_pred, squared=False):.3f}")
     print(f"MAE: {mean_absolute_error(y_test, y_pred):.3f}")
 
-    # Coefficients
     coef_df = pd.DataFrame({"feature": features.columns, "coef": model.coef_})
     print("\nCoefficients:")
     print(coef_df)
 
     ray.shutdown()
 
-
 if __name__ == "__main__":
     main()
+
