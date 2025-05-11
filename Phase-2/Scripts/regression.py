@@ -60,7 +60,7 @@ def main():
  #   print(coef_df)
 
     # Plots directory
-    plots_dir = os.path.join(args.input_dir, "visualizations")
+    plots_dir = "visualizations"
     os.makedirs(plots_dir, exist_ok=True)
 
     def scatterplot(x, y, xlabel, ylabel, title, filename):
@@ -79,6 +79,9 @@ def main():
     scatterplot(pdf["num_hashtags"], pdf["popularity_score"], "Number of Hashtags", "Popularity", "Hashtags vs Popularity", "hashtags_vs_popularity.png")
     scatterplot(pdf["text_length"], pdf["popularity_score"], "Text Length", "Popularity", "Text Length vs Popularity", "length_vs_popularity.png")
     scatterplot(pdf["user_followers"], pdf["popularity_score"], "Followers", "Popularity", "Followers vs Popularity", "followers_vs_popularity.png")
+    scatterplot(pdf["sentiment_score"], pdf["favorite_count"], "Sentiment Score", "Favorites", "Sentiment vs Favorites", "sentiment_vs_favorites.png")
+    scatterplot(pdf["sentiment_score"], pdf["retweet_count"], "Sentiment Score", "Retweets", "Sentiment vs Retweets", "sentiment_vs_retweets.png")
+        
 
     # Scatter plots vs favorites and retweets
     scatterplot(pdf["text_length"], pdf["favorite_count"], "Text Length", "Favorites", "Text Length vs Favorites", "length_vs_favorites.png")
