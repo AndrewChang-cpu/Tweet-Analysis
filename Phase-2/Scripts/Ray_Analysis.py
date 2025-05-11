@@ -20,6 +20,14 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from glob import glob
+import time
+from transformers import pipeline
+
+# Download once and cache locally
+print("Downloading models to local cache...")
+pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
+pipeline("text-classification", model="j-hartmann/emotion-english-distilroberta-base", return_all_scores=True)
+print("Download complete.")
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -44,13 +52,15 @@ def run_batch(batch: pd.DataFrame) -> pd.DataFrame:
     sentiment_pipe = pipeline(
         "sentiment-analysis",
         model="distilbert-base-uncased-finetuned-sst-2-english",
-        device=device
+        device=device,
+        local_files_only=True
     )
     emotion_pipe = pipeline(
         "text-classification",
         model="j-hartmann/emotion-english-distilroberta-base",
         return_all_scores=True,
-        device=device
+        device=device,
+        local_files_only=True
     )
 
     texts = batch["full_text"].tolist()
@@ -71,11 +81,15 @@ def main():
     csv_files = glob(os.path.join(input_path, "*.csv")) if os.path.isdir(input_path) else glob(input_path)
     ds = read_csv(csv_files)
 
+    start_time = time.time()
     ds = ds.map_batches(
         lambda b: ray.get(run_batch.remote(b)),
         batch_size=256,
         batch_format="pandas"
     )
+    end_time = time.time()
+
+    print(f"Inference time: {end_time - start_time:.2f} seconds")
 
     ds.write_csv(f"{args.output_dir}/tweets_augmented")
 
