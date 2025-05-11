@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Ray Analysis Pipeline (Python)
 
@@ -21,12 +22,17 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from glob import glob
 import time
-from transformers import pipeline
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 
-# Download once and cache locally
+# Ensure offline mode
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
+# Download and cache models once
 print("Downloading models to local cache...")
-pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
-pipeline("text-classification", model="j-hartmann/emotion-english-distilroberta-base", return_all_scores=True)
+sentiment_tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english")
+sentiment_model = AutoModelForSequenceClassification.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english")
+emotion_tokenizer = AutoTokenizer.from_pretrained("j-hartmann/emotion-english-distilroberta-base")
+emotion_model = AutoModelForSequenceClassification.from_pretrained("j-hartmann/emotion-english-distilroberta-base")
 print("Download complete.")
 
 def parse_args():
@@ -43,24 +49,25 @@ def parse_args():
 
 @ray.remote(num_gpus=1)
 def run_batch(batch: pd.DataFrame) -> pd.DataFrame:
-    from transformers import pipeline
     import torch
+    from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
 
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
     device = 0 if torch.cuda.is_available() else -1
     print("IS GPU AVAILABLE?", torch.cuda.is_available())
 
     sentiment_pipe = pipeline(
         "sentiment-analysis",
-        model="distilbert-base-uncased-finetuned-sst-2-english",
-        device=device,
-        local_files_only=True
+        model=AutoModelForSequenceClassification.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english", local_files_only=True),
+        tokenizer=AutoTokenizer.from_pretrained("distilbert-base-uncased-finetuned-sst-2-english", local_files_only=True),
+        device=device
     )
     emotion_pipe = pipeline(
         "text-classification",
-        model="j-hartmann/emotion-english-distilroberta-base",
+        model=AutoModelForSequenceClassification.from_pretrained("j-hartmann/emotion-english-distilroberta-base", local_files_only=True),
+        tokenizer=AutoTokenizer.from_pretrained("j-hartmann/emotion-english-distilroberta-base", local_files_only=True),
         return_all_scores=True,
-        device=device,
-        local_files_only=True
+        device=device
     )
 
     texts = batch["full_text"].tolist()
@@ -110,4 +117,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
