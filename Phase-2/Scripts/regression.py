@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-"""
-Linear Regression on Augmented Tweet Data with Visualization
-
-Usage:
-  python regression_model.py --input_dir path/to/tweets_augmented
-"""
-
 import argparse
 import os
 import glob
@@ -24,11 +16,7 @@ def parse_args():
     )
     return parser.parse_args()
 
-def main():
-    args = parse_args()
-    csv_files = glob.glob(os.path.join(args.input_dir, "tweets_augmented", "*.csv"))
-    pdf = pd.concat([pd.read_csv(f) for f in csv_files], ignore_index=True)
-
+def run_regression(pdf: pd.DataFrame):
     pdf["has_hashtag"] = (pdf["num_hashtags"] > 0).astype(int)
     pdf["has_media"] = (pdf.get("num_media", pd.Series(0)) > 0).astype(int)
 
@@ -47,17 +35,27 @@ def main():
         features, target, test_size=0.2, random_state=42
     )
 
-#    model = LinearRegression().fit(X_train, y_train)
- #   y_pred = model.predict(X_test)
+    print('Dimensions', X_train.shape)
+    print(X_train[:5])
+    model = LinearRegression().fit(X_train, y_train)
+    y_pred = model.predict(X_test)
 
     print("\nRegression results:")
-   # print(f"R2: {r2_score(y_test, y_pred):.3f}")
-    #print(f"RMSE: {mean_squared_error(y_test, y_pred, squared=False):.3f}")
-    #print(f"MAE: {mean_absolute_error(y_test, y_pred):.3f}")
+    print(f"R2: {r2_score(y_test, y_pred):.3f}")
+    print(f"RMSE: {mean_squared_error(y_test, y_pred, squared=False):.3f}")
+    print(f"MAE: {mean_absolute_error(y_test, y_pred):.3f}")
 
-#    coef_df = pd.DataFrame({"feature": features.columns, "coef": model.coef_})
+    coef_df = pd.DataFrame({"feature": features.columns, "coef": model.coef_})
     print("\nCoefficients:")
- #   print(coef_df)
+    print(coef_df)
+
+def main():
+    args = parse_args()
+    csv_files = glob.glob(os.path.join(args.input_dir, "tweets_augmented", "*.csv"))
+    pdf = pd.concat([pd.read_csv(f) for f in csv_files], ignore_index=True)
+
+    pdf["has_hashtag"] = (pdf["num_hashtags"] > 0).astype(int)
+    pdf["has_media"] = (pdf.get("num_media", pd.Series(0)) > 0).astype(int)
 
     # Plots directory
     plots_dir = "visualizations"
@@ -76,11 +74,11 @@ def main():
 
     # Scatter plots vs popularity
     scatterplot(pdf["sentiment_score"], pdf["popularity_score"], "Sentiment Score", "Popularity", "Sentiment vs Popularity", "sentiment_vs_popularity.png")
+    scatterplot(pdf["sentiment_score"], pdf["favorite_count"], "Sentiment Score", "Favorites", "Sentiment vs Favorites", "sentiment_vs_favorites.png")
+    scatterplot(pdf["sentiment_score"], pdf["retweet_count"], "Sentiment Score", "Retweets", "Sentiment vs Retweets", "sentiment_vs_retweets.png")
     scatterplot(pdf["num_hashtags"], pdf["popularity_score"], "Number of Hashtags", "Popularity", "Hashtags vs Popularity", "hashtags_vs_popularity.png")
     scatterplot(pdf["text_length"], pdf["popularity_score"], "Text Length", "Popularity", "Text Length vs Popularity", "length_vs_popularity.png")
     scatterplot(pdf["user_followers"], pdf["popularity_score"], "Followers", "Popularity", "Followers vs Popularity", "followers_vs_popularity.png")
-    scatterplot(pdf["sentiment_score"], pdf["favorite_count"], "Sentiment Score", "Favorites", "Sentiment vs Favorites", "sentiment_vs_favorites.png")
-    scatterplot(pdf["sentiment_score"], pdf["retweet_count"], "Sentiment Score", "Retweets", "Sentiment vs Retweets", "sentiment_vs_retweets.png")
         
 
     # Scatter plots vs favorites and retweets
@@ -98,8 +96,13 @@ def main():
 
     for i, emotion in enumerate(emotion_stats.index):
         stats = emotion_stats.loc[emotion]
-        label = f"Q2: {stats['50%']:.1f}\nN: {int(stats['count'])}"
-        plt.text(i, stats["75%"] + 3, label, ha='center', fontsize=9, color="black")
+        label = (
+            f"Q1: {stats['25%']:.1f}\n"
+            f"Q2: {stats['50%']:.1f}\n"
+            f"Q3: {stats['75%']:.1f}\n"
+            f"N: {int(stats['count'])}"
+        )
+        plt.text(i, stats["75%"] + 8, label, ha='center', fontsize=9, color="black")
 
     plt.title("Popularity Score by Emotion")
     plt.xlabel("Emotion")
@@ -107,6 +110,10 @@ def main():
     plt.tight_layout()
     plt.savefig(os.path.join(plots_dir, "emotion_vs_popularity_boxplot.png"))
     plt.close()
+    
+    # Run Regression
+    run_regression(pdf)
+
 
 if __name__ == "__main__":
     main()
