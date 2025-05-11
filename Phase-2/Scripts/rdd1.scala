@@ -2,6 +2,10 @@ import org.apache.spark.sql.{Row}
 import org.apache.spark.sql.types._
 import scala.util.parsing.json.JSON
 
+println(s"Number of workers: ${sc.defaultParallelism}")
+
+val startTime = System.nanoTime()
+
 val inputPath = "/home/ubuntu/out.json"
 
 val tweetsRDD = sc.textFile(inputPath).map(line => JSON.parseFull(line).getOrElse(Map.empty[String, Any])).map {
@@ -35,3 +39,6 @@ val tweetsDF = spark.createDataFrame(tweetsRDD, schema)
 
 // Write as single CSV file
 tweetsDF.write.mode("overwrite").option("header", "true").csv("output_tweets_features.csv")
+
+val endTime = System.nanoTime()
+println(s"Execution time: ${(endTime - startTime) / 1e9} seconds")
