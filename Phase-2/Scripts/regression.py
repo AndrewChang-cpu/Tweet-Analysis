@@ -110,7 +110,7 @@ def main():
             f"Q3: {stats['75%']:.1f}\n"
             f"N: {int(stats['count'])}"
         )
-        y_pos = stats["75%"] + 0.05 * stats["max"]  # 5% above Q3 for spacing
+        y_pos = stats["75%"] + 1 * stats["max"]  # 5% above Q3 for spacing
         plt.text(i, y_pos, label, ha='center', fontsize=9, color="black")
 
     plt.title("Popularity Score by Emotion")
