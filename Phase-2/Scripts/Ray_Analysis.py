@@ -19,6 +19,7 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+from glob import glob
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -59,6 +60,7 @@ def run_batch(batch: pd.DataFrame) -> pd.DataFrame:
     batch["sentiment_score"] = [s["score"] for s in sents]
     batch["emotion_label"] = [max(e, key=lambda x: x["score"])["label"] for e in emos]
     batch["emotion_score"] = [max(e, key=lambda x: x["score"])["score"] for e in emos]
+    batch["popularity_score"] = batch["retweet_count"] + batch["favorite_count"]
     return batch
 
 def main():
@@ -66,10 +68,8 @@ def main():
     ray.init()
 
     input_path = args.input_csv
-    if os.path.isdir(input_path):
-        input_path = os.path.join(input_path, "*.csv")
-
-    ds = read_csv(input_path)
+    csv_files = glob(os.path.join(input_path, "*.csv")) if os.path.isdir(input_path) else glob(input_path)
+    ds = read_csv(csv_files)
 
     ds = ds.map_batches(
         lambda b: ray.get(run_batch.remote(b)),
@@ -91,39 +91,6 @@ def main():
     print(pdf.groupby(pdf["num_hashtags"] > 0)["popularity_score"].mean())
 
     print(f"\nText length correlation: {pdf['text_length'].corr(pdf['popularity_score']):.3f}")
-
-    pdf["has_hashtag"] = (pdf["num_hashtags"] > 0).astype(int)
-    pdf["has_media"] = (pdf.get("num_media", pd.Series(0)) > 0).astype(int)
-
-    features = pdf[[
-        "sentiment_score",
-        "emotion_score",
-        "text_length",
-        "has_hashtag",
-        "has_media",
-        "user_followers",
-        "user_friends"
-    ]]
-
-    target = pdf["popularity_score"]
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        features, target, test_size=0.2, random_state=42
-    )
-    print(X_train.shape)
-    print(X_train[:5])
-
-    model = LinearRegression().fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-
-    print("\nRegression results:")
-    print(f"R2: {r2_score(y_test, y_pred):.3f}")
-    print(f"RMSE: {mean_squared_error(y_test, y_pred, squared=False):.3f}")
-    print(f"MAE: {mean_absolute_error(y_test, y_pred):.3f}")
-
-    coef_df = pd.DataFrame({"feature": features.columns, "coef": model.coef_})
-    print("\nCoefficients:")
-    print(coef_df)
 
     ray.shutdown()
 
