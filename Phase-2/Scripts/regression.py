@@ -53,7 +53,12 @@ def main():
     args = parse_args()
     csv_files = glob.glob(os.path.join(args.input_dir, "tweets_augmented", "*.csv"))
     pdf = pd.concat([pd.read_csv(f) for f in csv_files], ignore_index=True)
-
+    
+    # Rescale sentiment_score between 0 and 1
+    pdf["sentiment_score"] = pdf.apply(
+        lambda row: 1 - row["sentiment_score"] if row.get("sentiment_label", "").lower() == "negative" else row["sentiment_score"],
+        axis=1
+    )
     pdf["has_hashtag"] = (pdf["num_hashtags"] > 0).astype(int)
     pdf["has_media"] = (pdf.get("num_media", pd.Series(0)) > 0).astype(int)
 
@@ -92,8 +97,11 @@ def main():
     # Boxplot: Emotion vs popularity
     plt.figure(figsize=(10, 6))
     sns.boxplot(x="emotion_label", y="popularity_score", data=pdf)
-    emotion_stats = pdf.groupby("emotion_label")["popularity_score"].describe()[["25%", "50%", "75%", "count"]]
 
+    # Compute descriptive stats
+    emotion_stats = pdf.groupby("emotion_label")["popularity_score"].describe()[["25%", "50%", "75%", "count", "max"]]
+
+    # Add labels above the boxes
     for i, emotion in enumerate(emotion_stats.index):
         stats = emotion_stats.loc[emotion]
         label = (
@@ -102,7 +110,8 @@ def main():
             f"Q3: {stats['75%']:.1f}\n"
             f"N: {int(stats['count'])}"
         )
-        plt.text(i, stats["75%"] + 8, label, ha='center', fontsize=9, color="black")
+        y_pos = stats["75%"] + 0.05 * stats["max"]  # 5% above Q3 for spacing
+        plt.text(i, y_pos, label, ha='center', fontsize=9, color="black")
 
     plt.title("Popularity Score by Emotion")
     plt.xlabel("Emotion")
@@ -110,7 +119,7 @@ def main():
     plt.tight_layout()
     plt.savefig(os.path.join(plots_dir, "emotion_vs_popularity_boxplot.png"))
     plt.close()
-    
+
     # Run Regression
     run_regression(pdf)
 
